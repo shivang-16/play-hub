@@ -50,6 +50,15 @@ export default function WordPuzzlePage() {
   // ── Word pronunciation & definition ─────────────────────────────────────
   const [definitionPopup, setDefinitionPopup] = useState<{ wordId: string; meaning: string; loading: boolean } | null>(null);
 
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const load = () => { voicesRef.current = window.speechSynthesis.getVoices(); };
+    load();
+    window.speechSynthesis.addEventListener('voiceschanged', load);
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', load);
+  }, []);
+
   const handlePronounce = useCallback((word: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -57,8 +66,9 @@ export default function WordPuzzlePage() {
     utterance.lang = 'en-US';
     utterance.rate = 1;
     utterance.pitch = 1;
-    // Pick a female English voice if available
-    const voices = window.speechSynthesis.getVoices();
+    const voices = voicesRef.current.length
+      ? voicesRef.current
+      : window.speechSynthesis.getVoices();
     const femaleVoice = voices.find(
       (v) => v.lang.startsWith('en') && /female|samantha|victoria|karen|fiona|zira|susan/i.test(v.name)
     ) ?? voices.find((v) => v.lang.startsWith('en') && /woman|girl/i.test(v.name));
@@ -698,10 +708,6 @@ export default function WordPuzzlePage() {
         <div className={styles.menuCard}>
           <div className={styles.menuEmoji}>📝</div>
           <h1 className={styles.menuTitle}>Word Search</h1>
-          <p className={styles.menuDesc}>
-            Multiplayer word search — race to find and claim hidden words.<br />
-            Longer words = more points!
-          </p>
 
           {/* Inline name field */}
           <div className={styles.nameRow}>
@@ -799,6 +805,18 @@ export default function WordPuzzlePage() {
           </div>
 
           {roomError && <p className={styles.errorMsg}>{roomError}</p>}
+
+          {/* Vocab CTA */}
+          <button
+            className={styles.vocabCta}
+            onClick={() => router.push('/word-puzzle/vocab')}
+          >
+            <BookOpen size={20} className={styles.vocabCtaIcon} />
+            <span className={styles.vocabCtaText}>
+              Want to learn something new?
+              <span className={styles.vocabCtaHint}>Explore rare &amp; powerful words →</span>
+            </span>
+          </button>
         </div>
       </div>
     );

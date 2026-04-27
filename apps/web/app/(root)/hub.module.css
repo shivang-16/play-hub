@@ -3,10 +3,7 @@
 .page {
   min-height: 100vh;
   min-height: 100dvh;
-  background:
-    radial-gradient(ellipse at 30% 0%, rgba(120,50,255,0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 70% 100%, rgba(255,100,80,0.08) 0%, transparent 50%),
-    #0a0a12;
+  
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -14,6 +11,35 @@
   font-family: var(--font-geist-sans, sans-serif);
   color: #fff;
   overflow-x: hidden;
+}
+
+/* Background image layer */
+.page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url('/image1.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.55;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Minimal dark vignette — just enough to keep text readable, no solid bg color */
+.page::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 6, 14, 0.45);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Lift all real content above the pseudo-element layers */
+.page > * {
+  position: relative;
+  z-index: 1;
 }
 
 /* ── Hero ─────────────────────────────────────────────────────── */
