@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import {
   Users, Trophy, Home as HomeIcon, Rocket,
-  Phone, PhoneOff, Mic, MicOff, MessageSquare, Volume2,
+  Phone, PhoneOff, Mic, MicOff, MessageSquare, Volume2, BookOpen, X,
 } from 'lucide-react';
 import styles from './word-puzzle.module.css';
 
@@ -46,6 +46,51 @@ export default function WordPuzzlePage() {
   const [nameShake, setNameShake]       = useState(false);
   const [socket, setSocket]             = useState<Socket | null>(null);
   const [phase, setPhase]               = useState<GamePhase>('menu');
+
+  // ── Word pronunciation & definition ─────────────────────────────────────
+  const [definitionPopup, setDefinitionPopup] = useState<{ wordId: string; meaning: string; loading: boolean } | null>(null);
+
+  const handlePronounce = useCallback((word: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word.toLowerCase());
+    utterance.lang = 'en-US';
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    // Pick a female English voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(
+      (v) => v.lang.startsWith('en') && /female|samantha|victoria|karen|fiona|zira|susan/i.test(v.name)
+    ) ?? voices.find((v) => v.lang.startsWith('en') && /woman|girl/i.test(v.name));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const handleShowDefinition = useCallback(async (wordId: string, word: string) => {
+    // Toggle off if already open for this word
+    if (definitionPopup?.wordId === wordId) {
+      setDefinitionPopup(null);
+      return;
+    }
+    setDefinitionPopup({ wordId, meaning: '', loading: true });
+    try {
+      const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
+      if (!res.ok) throw new Error('Not found');
+      const data = await res.json();
+      const meanings: string[] = [];
+      for (const entry of data) {
+        for (const m of entry.meanings ?? []) {
+          const def = m.definitions?.[0]?.definition;
+          if (def) { meanings.push(`(${m.partOfSpeech}) ${def}`); }
+          if (meanings.length >= 2) break;
+        }
+        if (meanings.length >= 2) break;
+      }
+      setDefinitionPopup({ wordId, meaning: meanings.length > 0 ? meanings.join(' • ') : 'No definition found.', loading: false });
+    } catch {
+      setDefinitionPopup({ wordId, meaning: 'Definition not available.', loading: false });
+    }
+  }, [definitionPopup]);
 
   // ── Lobby / matchmaking ─────────────────────────────────────────────────
   const [friendRoomCode, setFriendRoomCode] = useState('');
@@ -846,17 +891,58 @@ export default function WordPuzzlePage() {
               {words.map((w) => {
                 const owner = w.claimedBy ? players.find((p) => p.username === w.claimedBy) : null;
                 const color = owner ? PLAYER_COLORS[owner.colorIndex]! : undefined;
+                const isDefOpen = definitionPopup?.wordId === w.id;
                 return (
-                  <div
-                    key={w.id}
-                    className={`${styles.wordItem} ${w.claimedBy ? styles.wordItemClaimed : ''}`}
-                    style={color ? { '--word-color': color } as CSSProperties : {}}
-                  >
-                    <span className={styles.wordItemText}>{w.word}</span>
-                    {w.claimedBy && (
-                      <span className={styles.wordOwner} style={{ color }}>
-                        {w.claimedBy === username ? 'You' : w.claimedBy}
-                      </span>
+                  <div key={w.id} className={styles.wordItemWrapper}>
+                    <div
+                      className={`${styles.wordItem} ${w.claimedBy ? styles.wordItemClaimed : ''}`}
+                      style={color ? { '--word-color': color } as CSSProperties : {}}
+                    >
+                      <span className={styles.wordItemText}>{w.word}</span>
+                      <div className={styles.wordItemActions}>
+                        {/* Pronounce button */}
+                        <button
+                          className={styles.wordActionBtn}
+                          onClick={() => handlePronounce(w.word)}
+                          title={`Pronounce "${w.word}"`}
+                          aria-label={`Pronounce ${w.word}`}
+                        >
+                          <Volume2 size={12} />
+                        </button>
+                        {/* Definition button */}
+                        <button
+                          className={`${styles.wordActionBtn} ${isDefOpen ? styles.wordActionBtnActive : ''}`}
+                          onClick={() => handleShowDefinition(w.id, w.word)}
+                          title={`Define "${w.word}"`}
+                          aria-label={`Show definition of ${w.word}`}
+                        >
+                          <BookOpen size={12} />
+                        </button>
+                        {w.claimedBy && (
+                          <span className={styles.wordOwner} style={{ color }}>
+                            {w.claimedBy === username ? 'You' : w.claimedBy}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Definition popup */}
+                    {isDefOpen && (
+                      <div className={styles.wordDefPopup}>
+                        {definitionPopup?.loading ? (
+                          <span className={styles.wordDefLoading}>Loading…</span>
+                        ) : (
+                          <>
+                            <span className={styles.wordDefText}>{definitionPopup?.meaning}</span>
+                            <button
+                              className={styles.wordDefClose}
+                              onClick={() => setDefinitionPopup(null)}
+                              aria-label="Close definition"
+                            >
+                              <X size={10} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

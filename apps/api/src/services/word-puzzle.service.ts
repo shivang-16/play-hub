@@ -6,18 +6,8 @@ import {
   WPCell,
   scoreForWord,
 } from '../types/word-puzzle';
+import { WORD_LIST } from '../data/word-bank';
 
-// ── Word bank (60 words, 4-8 letters, uppercase) ─────────────────────────────
-const WORD_BANK = [
-  'PYTHON', 'ROCKET', 'PLANET', 'WINTER', 'SILVER', 'JUNGLE', 'CASTLE', 'DRAGON',
-  'BRIDGE', 'FOREST', 'JACKET', 'MATRIX', 'NEEDLE', 'PARROT', 'SALMON', 'TEMPLE',
-  'VIOLIN', 'WINDOW', 'YELLOW', 'BLAZE', 'CHARM', 'CROWN', 'DAISY', 'EAGLE',
-  'FLAME', 'GRAPE', 'HAVEN', 'JOKER', 'KARMA', 'LASER', 'MAPLE', 'NOVEL',
-  'OASIS', 'PEARL', 'QUAKE', 'RIDGE', 'SNAKE', 'TIGER', 'VAPOR', 'WITCH',
-  'PIXEL', 'DREAM', 'CYBER', 'SPARK', 'STORM', 'BRAVE', 'CLOCK', 'DANCE',
-  'EARTH', 'FROST', 'GHOST', 'HEART', 'HONEY', 'LIGHT', 'MAGIC', 'QUEST',
-  'RADIO', 'SOLAR', 'TOWER', 'CORAL', 'DELTA', 'FLASH', 'PRISM', 'ORBIT',
-];
 
 /** 8 directional vectors: [rowDelta, colDelta] */
 const DIRECTIONS: [number, number][] = [
@@ -47,9 +37,11 @@ export function gridSizeForWordCount(count: number): number {
   return 22;                  // hard  — large
 }
 
-// ── Pick N random unique words ───────────────────────────────────────────────
+// ── Pick N random unique words from the shared word bank ─────────────────────
 function pickWords(n: number): string[] {
-  const shuffled = [...WORD_BANK].sort(() => Math.random() - 0.5);
+  // Deduplicate WORD_LIST entries first (the bank may have a word listed twice)
+  const unique = [...new Set(WORD_LIST)];
+  const shuffled = unique.sort(() => Math.random() - 0.5);
   return shuffled.slice(0, Math.min(n, shuffled.length));
 }
 

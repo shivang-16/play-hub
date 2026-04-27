@@ -592,6 +592,111 @@
   max-width: 52px;
 }
 
+/* ── Word item wrapper (holds the row + definition popup) ── */
+.wordItemWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Action buttons (sound + definition) ── */
+.wordItemActions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.wordActionBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(180,230,180,0.18);
+  background: rgba(255,255,255,0.05);
+  color: rgba(180,230,180,0.55);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.wordActionBtn:hover {
+  background: rgba(180,230,180,0.12);
+  border-color: rgba(180,230,180,0.4);
+  color: rgba(200,255,200,0.9);
+  transform: scale(1.12);
+}
+.wordActionBtn:active {
+  transform: scale(0.95);
+}
+.wordActionBtnActive {
+  background: rgba(200,151,42,0.2);
+  border-color: rgba(200,151,42,0.5);
+  color: #ffd080;
+}
+.wordActionBtnActive:hover {
+  background: rgba(200,151,42,0.3);
+  border-color: rgba(200,151,42,0.7);
+  color: #ffe4b0;
+}
+
+/* ── Definition popup ── */
+.wordDefPopup {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: rgba(20, 10, 2, 0.92);
+  border: 1px solid rgba(200,151,42,0.35);
+  border-radius: 0 0 6px 6px;
+  padding: 7px 8px 6px;
+  margin-top: -1px;
+  animation: defSlideIn 0.18s ease;
+}
+
+@keyframes defSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.wordDefText {
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: rgba(255,228,176,0.85);
+  flex: 1;
+  word-break: break-word;
+}
+
+.wordDefLoading {
+  font-size: 0.66rem;
+  color: rgba(200,151,42,0.6);
+  font-style: italic;
+  flex: 1;
+}
+
+.wordDefClose {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: none;
+  background: rgba(255,255,255,0.07);
+  color: rgba(200,200,200,0.5);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: background 0.12s, color 0.12s;
+}
+.wordDefClose:hover {
+  background: rgba(255,80,80,0.2);
+  color: #ff8080;
+}
+
 /* ── Board wrapper ── */
 .boardWrap {
   flex: 1;
@@ -970,31 +1075,35 @@
 /* Right-side sliding panel */
 .wpChatPanel {
   position: fixed;
-  right: 0;
-  bottom: 72px;
-  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
+  top: auto;
   width: 52px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: flex-end;
+  gap: 6px;
   z-index: 200;
   pointer-events: none;
 }
 .wpChatPanel > * { pointer-events: all; }
 
-/* When open, expand to full chat width */
+/* When open, expand upward from center */
 .wpChatOpen {
-  width: 280px;
+  width: 300px;
+  flex-direction: column;
+  align-items: stretch;
+  bottom: 12px;
 }
 
-/* Call tab button (above chat tab) */
+/* Call tab button */
 .wpCallTabBtn {
   width: 44px;
   height: 44px;
-  border-radius: 12px 0 0 12px;
+  border-radius: 12px;
   background: rgba(20, 10, 6, 0.88);
   border: 1.5px solid rgba(200,149,74,0.3);
-  border-right: none;
   color: rgba(255,228,176,0.7);
   display: flex;
   align-items: center;
@@ -1027,10 +1136,9 @@
 .wpChatToggle {
   width: 44px;
   height: 48px;
-  border-radius: 12px 0 0 12px;
+  border-radius: 12px;
   background: rgba(20, 10, 6, 0.88);
   border: 1.5px solid rgba(200,149,74,0.3);
-  border-right: none;
   color: rgba(255,228,176,0.7);
   display: flex;
   align-items: center;
