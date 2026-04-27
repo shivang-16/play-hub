@@ -1127,7 +1127,7 @@
   /* ── Word list: horizontal scroll strip pinned at TOP ── */
   .wordList {
     width: 100% !important;
-    height: 72px !important;
+    height: 58px !important;
     flex-shrink: 0;
     flex-direction: row !important;
     padding: 6px 8px !important;
@@ -1174,14 +1174,15 @@
    * the outer boardWrap (no touch-action set) handles the pan.
    */
   .board {
-    width: calc(var(--grid-size, 15) * 30px) !important;
-    height: calc(var(--grid-size, 15) * 30px) !important;
+    width: calc(var(--grid-size, 15) * 24px) !important;
+    height: calc(var(--grid-size, 15) * 24px) !important;
     flex-shrink: 0;
-    padding: 6px;
+    padding: 4px;
+    gap: 2px;
   }
 
   .cell {
-    font-size: 16px;
+    font-size: 11px;
     aspect-ratio: 1;
   }
 
