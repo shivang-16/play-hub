@@ -894,13 +894,57 @@ export default function DotsAndBoxesPage() {
             <stop offset="45%"  stopColor="white" stopOpacity="0.02" />
             <stop offset="100%" stopColor="black" stopOpacity="0.30" />
           </linearGradient>
-          {/* Dot radial gradient — shiny sphere */}
+          {/* Dot radial gradient — shiny dark sphere on light board */}
           <radialGradient id="dotGrad" cx="32%" cy="30%" r="68%">
             <stop offset="0%"   stopColor="rgba(255,255,255,0.95)" />
-            <stop offset="38%"  stopColor="rgba(220,200,255,0.80)" />
-            <stop offset="100%" stopColor="rgba(100,30,180,0.90)" />
+            <stop offset="38%"  stopColor="rgba(205, 180, 246, 0.8)" />
+            <stop offset="100%" stopColor="rgba(50,20,100,0.95)" />
           </radialGradient>
+          {/* Hollow cell inset shadow — dark top-left, lighter bottom-right */}
+          <linearGradient id="cellInset" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stopColor="#555566" stopOpacity="0.30" />
+            <stop offset="45%"  stopColor="#555566" stopOpacity="0.04" />
+            <stop offset="100%" stopColor="white"   stopOpacity="0.20" />
+          </linearGradient>
+          {/* Board surface gradient — purplish grey */}
+          <linearGradient id="boardGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%"   stopColor="#ddd8ee" />
+            <stop offset="100%" stopColor="#cdc6e0" />
+          </linearGradient>
         </defs>
+
+        {/* Board surface — grey-white background */}
+        <rect x={0} y={0} width={svgW} height={svgH}
+          rx={14} ry={14}
+          fill="url(#boardGrad)"
+        />
+
+        {/* Empty cell backgrounds — hollow recessed look */}
+        {Array.from({ length: gridRows }, (_, r) =>
+          Array.from({ length: gridCols }, (_, c) => {
+            if (boxes[r]![c] !== null) return null;
+            const bx = margin + c * cell + 2;
+            const by = margin + r * cell + 2;
+            const cw = cell - 4;
+            const ch = cell - 4;
+            return (
+              <g key={`cbg-${r}-${c}`}>
+                {/* base cell — slightly darker than board to create depth */}
+                <rect x={bx} y={by} width={cw} height={ch} rx={4}
+                  fill="#b8b0d0"
+                />
+                {/* inset shadow overlay */}
+                <rect x={bx} y={by} width={cw} height={ch} rx={4}
+                  fill="url(#cellInset)"
+                />
+                {/* inner surface — the "floor" of the hollow */}
+                <rect x={bx + 2} y={by + 2} width={cw - 4} height={ch - 4} rx={3}
+                  fill="#cec8e2"
+                />
+              </g>
+            );
+          })
+        )}
 
         {/* Box fills — colored base + 3D gradient overlay */}
         {boxes.map((rowArr, r) =>
@@ -962,7 +1006,7 @@ export default function DotsAndBoxesPage() {
                   />
                 ) : (
                   <line x1={x1} y1={y} x2={x2} y2={y}
-                    strokeWidth={lineW - 1} stroke="rgba(220,210,255,0.22)"
+                    strokeWidth={lineW - 1} stroke="rgba(80,60,120,0.25)"
                     className={styles.lineEmpty} />
                 )}
                 {owner === null && (
@@ -1022,7 +1066,7 @@ export default function DotsAndBoxesPage() {
                   />
                 ) : (
                   <line x1={x} y1={y1} x2={x} y2={y2}
-                    strokeWidth={lineW - 1} stroke="rgba(220,210,255,0.22)"
+                    strokeWidth={lineW - 1} stroke="rgba(80,60,120,0.25)"
                     className={styles.lineEmpty} />
                 )}
                 {owner === null && (
