@@ -11,6 +11,8 @@ import {
   Phone, PhoneOff, Mic, MicOff, MessageSquare, Volume2, BookOpen, X,
 } from 'lucide-react';
 import styles from './word-puzzle.module.css';
+import GameGuide from '../../components/GameGuide';
+import WinCelebration from '../../components/WinCelebration';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
 
@@ -123,6 +125,9 @@ export default function WordPuzzlePage() {
   const [players, setPlayers]           = useState<WPPlayer[]>([]);
   const [myColorIndex, setMyColorIndex] = useState(0);
   const [endResult, setEndResult]       = useState<WPPlayer[] | null>(null);
+  const [showGuide, setShowGuide]       = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationShownRef = useRef(false);
 
   // ── Rematch state ──────────────────────────────────────────────────────
   const [rematchWaiting, setRematchWaiting] = useState(false);
@@ -242,6 +247,10 @@ export default function WordPuzzlePage() {
       setRematchVotes(0);
       setRematchNeeded(0);
       setRematchError(null);
+      if (!celebrationShownRef.current) {
+        celebrationShownRef.current = true;
+        setTimeout(() => setShowCelebration(true), 800);
+      }
     });
 
     // Rematch progress
@@ -368,7 +377,11 @@ export default function WordPuzzlePage() {
     setRematchVotes(0);
     setRematchNeeded(0);
     setRematchError(null);
+    celebrationShownRef.current = false;
     setPhase('playing');
+    if (!sessionStorage.getItem('guide_word-puzzle')) {
+      setShowGuide(true);
+    }
     if (solo || data.players.length === 1) {
       setIsSolo(true);
       setSoloElapsed(0);
@@ -879,6 +892,23 @@ export default function WordPuzzlePage() {
 
     return (
       <div className={styles.gamePage}>
+        {showGuide && (
+          <GameGuide
+            gameKey="word-puzzle"
+            onDone={() => {
+              sessionStorage.setItem('guide_word-puzzle', '1');
+              setShowGuide(false);
+            }}
+          />
+        )}
+        {showCelebration && phase === 'ended' && (
+          <WinCelebration
+            gameKey="word-puzzle"
+            winnerName={endResult ? (endResult[0]?.username ?? '') : ''}
+            currentUser={username}
+            onClose={() => setShowCelebration(false)}
+          />
+        )}
         {/* Top bar */}
         <header className={styles.topBar}>
           <button className={styles.homeBtn} onClick={() => {

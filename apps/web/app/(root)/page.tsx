@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import styles from './hub.module.css';
+import WelcomePopup from '../../components/WelcomePopup';
 
 const GAMES = [
   {
@@ -42,6 +43,7 @@ const GAMES = [
 export default function HubPage() {
   return (
     <div className={styles.page}>
+      <WelcomePopup />
       {/* Hero */}
       <header className={styles.hero}>
         <div className={styles.logoWrap}>

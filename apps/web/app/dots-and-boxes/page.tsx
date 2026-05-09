@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import { MessageSquare, Home as HomeIcon, Users, Trophy, Phone, Mic, MicOff, Volume2 } from 'lucide-react';
 import styles from './dab.module.css';
+import GameGuide from '../../components/GameGuide';
+import WinCelebration from '../../components/WinCelebration';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
 
@@ -214,6 +216,9 @@ export default function DotsAndBoxesPage() {
   const [rematchNeeded, setRematchNeeded] = useState(0);
   const [rematchVoted, setRematchVoted] = useState(false);
   const [errorMsg, setErrorMsg]         = useState('');
+  const [showGuide, setShowGuide]       = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationShownRef = useRef(false);
 
   // ── Call state ────────────────────────────────────────────────────────────
   const [callRoomActive, setCallRoomActive]       = useState(false);
@@ -367,7 +372,11 @@ export default function DotsAndBoxesPage() {
       yourUsername: name,
     };
     setGameState(gs);
+    celebrationShownRef.current = false;
     setPhase('playing');
+    if (!sessionStorage.getItem('guide_dots-and-boxes')) {
+      setShowGuide(true);
+    }
   }, [username]);
 
   // ── Bot turn effect ───────────────────────────────────────────────────────
@@ -391,12 +400,15 @@ export default function DotsAndBoxesPage() {
         setGameState(newState);
         if (isGameOver(newState)) {
           setRankings(computeRankings(newState));
-          setWinner(
-            newState.scores[0]! > newState.scores[1]! ? newState.yourUsername
+          const w = newState.scores[0]! > newState.scores[1]! ? newState.yourUsername
               : newState.scores[0]! === newState.scores[1]! ? 'tie'
-              : '🤖 Dot Bot'
-          );
+              : '🤖 Dot Bot';
+          setWinner(w);
           setPhase('ended');
+          if (!celebrationShownRef.current) {
+            celebrationShownRef.current = true;
+            setTimeout(() => setShowCelebration(true), 800);
+          }
         }
       }
       botBusyRef.current = false;
@@ -647,6 +659,10 @@ export default function DotsAndBoxesPage() {
         setWinner(data.winner);
         setRematchNeeded(data.players.length);
         setPhase('ended');
+        if (!celebrationShownRef.current) {
+          celebrationShownRef.current = true;
+          setTimeout(() => setShowCelebration(true), 800);
+        }
       });
 
       sock.on('dab:rematch:progress', (data: { votes: number; needed: number }) => {
@@ -665,7 +681,11 @@ export default function DotsAndBoxesPage() {
         setWinner(null);
         setRematchVotes(0);
         setRematchVoted(false);
+        celebrationShownRef.current = false;
         setPhase('playing');
+        if (!sessionStorage.getItem('guide_dots-and-boxes')) {
+          setShowGuide(true);
+        }
       });
 
       sock.on('dab:chat:message', (msg: ChatMessage) => {
@@ -792,12 +812,15 @@ export default function DotsAndBoxesPage() {
       if (isGameOver(newState)) {
         const rk = computeRankings(newState);
         setRankings(rk);
-        setWinner(
-          newState.scores[0]! > newState.scores[1]! ? newState.yourUsername
+        const w = newState.scores[0]! > newState.scores[1]! ? newState.yourUsername
             : newState.scores[0]! === newState.scores[1]! ? 'tie'
-            : '🤖 Dot Bot'
-        );
+            : '🤖 Dot Bot';
+        setWinner(w);
         setPhase('ended');
+        if (!celebrationShownRef.current) {
+          celebrationShownRef.current = true;
+          setTimeout(() => setShowCelebration(true), 800);
+        }
       }
     },
     [gameState]
@@ -1276,6 +1299,15 @@ export default function DotsAndBoxesPage() {
 
     return (
       <div className={styles.container}>
+        {showGuide && (
+          <GameGuide
+            gameKey="dots-and-boxes"
+            onDone={() => {
+              sessionStorage.setItem('guide_dots-and-boxes', '1');
+              setShowGuide(false);
+            }}
+          />
+        )}
         <div className={styles.gameLayout}>
           {/* Sidebar */}
           <aside className={styles.sidebar}>
@@ -1454,6 +1486,14 @@ export default function DotsAndBoxesPage() {
 
     return (
       <div className={styles.container}>
+        {showCelebration && gameState && (
+          <WinCelebration
+            gameKey="dots-and-boxes"
+            winnerName={winner ?? ''}
+            currentUser={gameState.yourUsername}
+            onClose={() => setShowCelebration(false)}
+          />
+        )}
         <div className={styles.menuWrap}>
           <div className={styles.endScreen}>
             <h1 className={styles.endTitle}>

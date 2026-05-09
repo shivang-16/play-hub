@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import styles from './game.module.css';
 import { BALL_COLORS } from '../room/[code]/page';
+import GameGuide from '../../components/GameGuide';
+import WinCelebration from '../../components/WinCelebration';
 import {
   Volume2, VolumeX, Mic, MicOff, Phone, PhoneOff,
   Users, Trophy, Medal, Home as HomeIcon, Rocket, Hourglass,
@@ -163,6 +165,11 @@ export default function Home() {
   /** username → colorId chosen in the lobby (invite games only); empty = use default slot colours */
   const [playerColorChoices, setPlayerColorChoices] = useState<Record<string, string>>({});
   
+  // Character guide / celebration state
+  const [showGuide, setShowGuide] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationShownRef = useRef(false);
+
   // UI feedback states
   const [usernameShake, setUsernameShake] = useState(false);
   
@@ -311,6 +318,11 @@ export default function Home() {
       setHasVotedRematch(false);
       setRematchVotes(0);
       setRematchNeeded(0);
+      celebrationShownRef.current = false;
+      // Show guide once per session
+      if (!sessionStorage.getItem('guide_4-in-a-row')) {
+        setShowGuide(true);
+      }
       console.log(`✅ Seat ${data.yourPlayerNumber}, isBot: ${data.isBot}`);
     });
 
@@ -436,6 +448,11 @@ export default function Home() {
         if (gameEndSoundRef.current) {
           gameEndSoundRef.current.currentTime = 0;
           gameEndSoundRef.current.play().catch((e: any) => console.log('Sound play failed:', e));
+        }
+        // Show celebration popup after a short delay
+        if (!celebrationShownRef.current) {
+          celebrationShownRef.current = true;
+          setTimeout(() => setShowCelebration(true), 800);
         }
       }
     );
@@ -1690,6 +1707,26 @@ export default function Home() {
         </div>
       )}
 
+      {/* Character game guide — shown once per session */}
+      {showGuide && (
+        <GameGuide
+          gameKey="4-in-a-row"
+          onDone={() => {
+            sessionStorage.setItem('guide_4-in-a-row', '1');
+            setShowGuide(false);
+          }}
+        />
+      )}
+
+      {/* Win / end celebration popup */}
+      {showCelebration && gameStatus === 'ended' && (
+        <WinCelebration
+          gameKey="4-in-a-row"
+          winnerName={winner ?? ''}
+          currentUser={username}
+          onClose={() => setShowCelebration(false)}
+        />
+      )}
 
     </div>
   );
