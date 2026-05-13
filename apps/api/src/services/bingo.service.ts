@@ -160,7 +160,9 @@ class BingoService {
     }
 
     // Block calling if ANY human player still hasn't marked the previous call on their card
-    if (game.currentCall !== null) {
+    // (skip this check when the bot is the caller — bot calls immediately after marking)
+    const callerIsBot = game.players.find((p) => p.username === callerUsername)?.isBot ?? false;
+    if (!callerIsBot && game.currentCall !== null) {
       const prev = game.currentCall;
       for (const player of game.players) {
         if (player.isBot || player.rank !== null) continue;
@@ -194,13 +196,9 @@ class BingoService {
     game.calledNumbers.push(num);
     game.currentCall = num;
 
-    // Advance caller to next player (skip bots — they'll be handled separately)
-    const humanPlayers = game.players.filter((p) => !p.isBot);
-    const humanCallerIdx = humanPlayers.findIndex((p) => p.username === callerUsername);
-    const nextHumanIdx = (humanCallerIdx + 1) % humanPlayers.length;
-    // Map back to full players array index
-    const nextCaller = humanPlayers[nextHumanIdx]!;
-    game.currentCallerIndex = game.players.findIndex((p) => p.username === nextCaller.username);
+    // Advance caller to next player (includes bots)
+    const callerIdx = game.players.findIndex((p) => p.username === callerUsername);
+    game.currentCallerIndex = (callerIdx + 1) % game.players.length;
 
     return {
       success: true,

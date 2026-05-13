@@ -1586,6 +1586,12 @@ export class WebSocketService {
           });
           this.bingoRematchVotes.set(gameId, new Set());
           setTimeout(() => bingoService.deleteGame(gameId), 120000);
+        } else if (room && game.isBot && game.botUsername) {
+          // After human marks, check if it's now the bot's turn and trigger bot call
+          const nextCaller = game.players[game.currentCallerIndex];
+          if (nextCaller?.username === game.botUsername) {
+            setTimeout(() => this.doBotCall(gameId, room!), 1200);
+          }
         }
       });
 
@@ -1656,12 +1662,16 @@ export class WebSocketService {
         if (!votes) { votes = new Set(); this.bingoRematchVotes.set(gameId, votes); }
         votes.add(username);
 
-        const players = room.gameState?.players.map((p) => p.username) ?? [];
-        const activePlayers = players.filter((u) => this.connectedPlayers.get(u)?.connected);
+        const isBotGame = room.gameState?.isBot ?? false;
+        const humanPlayers = (room.gameState?.players ?? [])
+          .filter((p) => !p.isBot)
+          .map((p) => p.username);
+        const activePlayers = humanPlayers.filter((u) => this.connectedPlayers.get(u)?.connected);
+        const needed = isBotGame ? 1 : activePlayers.length;
 
         for (const u of activePlayers) {
           this.connectedPlayers.get(u)?.emit('bingo:rematch:progress', {
-            gameId, votes: votes.size, needed: activePlayers.length, voted: [...votes],
+            gameId, votes: votes.size, needed, voted: [...votes],
           });
         }
 
@@ -1669,7 +1679,7 @@ export class WebSocketService {
           const timer = setTimeout(() => this.startBingoRematch(gameId), 30000);
           this.bingoRematchTimers.set(gameId, timer);
         }
-        if (votes.size >= activePlayers.length) {
+        if (votes.size >= needed) {
           this.startBingoRematch(gameId);
         }
       });
@@ -2076,12 +2086,20 @@ export class WebSocketService {
     const botUsername = game.botUsername;
     if (!botUsername) return;
 
+    // Verify it's actually the bot's turn
+    const currentCaller = game.players[game.currentCallerIndex];
+    if (!currentCaller || currentCaller.username !== botUsername) return;
+
     // Pick a random number from remaining pool
     if (game.numberPool.length === 0) return;
     const chosen = game.numberPool[Math.floor(Math.random() * game.numberPool.length)]!;
 
     const result = bingoService.callNumber(gameId, botUsername, chosen);
-    if (!result.success) return;
+    if (!result.success) {
+      // Retry after a short delay (e.g. human hasn't marked yet — shouldn't happen now, but safety net)
+      setTimeout(() => this.doBotCall(gameId, room), 1500);
+      return;
+    }
 
     // Bot auto-marks its own card
     bingoService.botMark(gameId, botUsername, chosen);
@@ -2169,28 +2187,38 @@ export class WebSocketService {
     const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
     if (!room) return;
 
+    const oldGame = bingoService.getGame(gameId);
+    const isBotGame = oldGame?.isBot ?? false;
+    const botUsername = oldGame?.botUsername;
+
     const votes = this.bingoRematchVotes.get(gameId);
     const timer = this.bingoRematchTimers.get(gameId);
     if (timer) clearTimeout(timer);
     this.bingoRematchTimers.delete(gameId);
     this.bingoRematchVotes.delete(gameId);
 
-    const participants = (votes ? [...votes] : []).filter(
+    const humanParticipants = (votes ? [...votes] : []).filter(
       (u) => this.connectedPlayers.get(u)?.connected
     );
 
-    if (participants.length < 2) {
-      for (const u of participants) {
+    // Bot game only needs 1 human to vote
+    const minNeeded = isBotGame ? 1 : 2;
+    if (humanParticipants.length < minNeeded) {
+      for (const u of humanParticipants) {
         this.connectedPlayers.get(u)?.emit('bingo:rematch:error', { message: 'Not enough players for rematch.' });
       }
       return;
     }
 
-    room.members = new Map(participants.map((u) => [u, this.connectedPlayers.get(u)!]));
-    room.hostUsername = participants[0]!;
+    const allParticipants = isBotGame && botUsername
+      ? [...humanParticipants, botUsername]
+      : humanParticipants;
+
+    room.members = new Map(humanParticipants.map((u) => [u, this.connectedPlayers.get(u)!]));
+    room.hostUsername = humanParticipants[0]!;
     room.status = 'lobby';
-    this.startBingoGame(room, participants, false);
-    console.log(`🔁 Bingo rematch started: ${participants.join(', ')}`);
+    this.startBingoGame(room, allParticipants, isBotGame, isBotGame ? botUsername : undefined);
+    console.log(`🔁 Bingo rematch started: ${allParticipants.join(', ')}`);
   }
 
   private handleBingoRoomLeave(socket: Socket) {
