@@ -83,6 +83,7 @@ export default function BingoPage() {
   const [currentCaller, setCurrentCaller] = useState('');
   const [rankings, setRankings]         = useState<RankEntry[]>([]);
   const [winner, setWinner]             = useState<string | null>(null);
+  const [showEndModal, setShowEndModal] = useState(false);
   const [callAnim, setCallAnim]         = useState(false);
   const [callBlockMsg, setCallBlockMsg] = useState('');
 
@@ -91,6 +92,7 @@ export default function BingoPage() {
   const [cardSubmitted, setCardSubmitted]       = useState(false);
   const [fillError, setFillError]               = useState('');
   const [fillInput, setFillInput]               = useState<string[][]>([]);
+  const [selectedPreset, setSelectedPreset]     = useState<number | null>(null);
 
 
   // Celebrations
@@ -339,7 +341,7 @@ export default function BingoPage() {
     sock.on('bingo:game:ended', (data: { winner: string | null; rankings: RankEntry[] }) => {
       setWinner(data.winner);
       setRankings(data.rankings);
-      setPhase('ended');
+      setShowEndModal(true);
       if (data.winner === usernameRef.current && !celebrationShownRef.current) {
         celebrationShownRef.current = true;
         setShowCelebration(true);
@@ -355,6 +357,9 @@ export default function BingoPage() {
       celebrationShownRef.current = false;
       setRematchVoted(false);
       setRematchVotes(0);
+      setShowEndModal(false);
+      setWinner(null);
+      setRankings([]);
       setChatMessages([]);
       applyGameStart(data);
     });
@@ -530,7 +535,8 @@ export default function BingoPage() {
         if (state.status === 'completed' || state.winner) {
           setWinner(state.winner);
           setRankings(state.rankings ?? []);
-          setPhase('ended');
+          setShowEndModal(true);
+          setPhase('playing');
         } else if (state.status === 'playing') {
           setPhase('playing');
         } else {
@@ -544,6 +550,39 @@ export default function BingoPage() {
   }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  const generatePresets = useCallback((rows: number, cols: number): number[][][] => {
+    const total = rows * cols;
+    const shuffle = (seed: number) => {
+      const nums = Array.from({ length: total }, (_, i) => i + 1);
+      let s = seed;
+      for (let i = nums.length - 1; i > 0; i--) {
+        s = (s * 1664525 + 1013904223) & 0x7fffffff;
+        const j = s % (i + 1);
+        [nums[i], nums[j]] = [nums[j]!, nums[i]!];
+      }
+      const grid: number[][] = [];
+      let idx = 0;
+      for (let r = 0; r < rows; r++) {
+        grid[r] = [];
+        for (let c = 0; c < cols; c++) grid[r]![c] = nums[idx++]!;
+      }
+      return grid;
+    };
+    // Use 5 different deterministic seeds that change each render via Date
+    const base = Math.floor(Date.now() / 1000);
+    return [0, 1, 2, 3, 4].map((i) => shuffle(base + i * 37));
+  }, []);
+
+  const [presets, setPresets] = useState<number[][][]>([]);
+
+  // Generate presets once when filling phase starts
+  useEffect(() => {
+    if (phase === 'filling' && gridRows > 0 && gridCols > 0) {
+      setPresets(generatePresets(gridRows, gridCols));
+      setSelectedPreset(null);
+    }
+  }, [phase, gridRows, gridCols, generatePresets]);
+
   const handleFillRandom = useCallback(() => {
     const total = gridRows * gridCols;
     const nums: number[] = [];
@@ -564,38 +603,13 @@ export default function BingoPage() {
     setFillError('');
   }, [gridRows, gridCols]);
 
-  const handleSubmitCard = useCallback(() => {
+  const handleSubmitCard = useCallback((card: number[][]) => {
     const gameId = gameDataRef.current?.gameId;
     if (!gameId || !socketRef.current) return;
-
-    // Validate all cells are filled
-    const rows = fillInput.length;
-    const cols = fillInput[0]?.length ?? 0;
-    const card: number[][] = [];
-    const seen = new Set<number>();
-    const maxNum = rows * cols;
-
-    for (let r = 0; r < rows; r++) {
-      card[r] = [];
-      for (let c = 0; c < cols; c++) {
-        const val = parseInt(fillInput[r]![c] ?? '', 10);
-        if (!val || val < 1 || val > maxNum) {
-          setFillError(`All cells must have numbers between 1 and ${maxNum}`);
-          return;
-        }
-        if (seen.has(val)) {
-          setFillError(`Duplicate number: ${val}. Each number must be unique.`);
-          return;
-        }
-        seen.add(val);
-        card[r]![c] = val;
-      }
-    }
-
     setFillError('');
     setMyCard(card);
     socketRef.current.emit('bingo:card:submit', { gameId, card });
-  }, [fillInput]);
+  }, []);
 
   const handleCallNumber = useCallback((num: number) => {
     const gameId = gameDataRef.current?.gameId;
@@ -783,48 +797,6 @@ export default function BingoPage() {
     );
   }
 
-  if (phase === 'ended') {
-    return (
-      <div className={styles.menuPage}>
-        {showCelebration && (
-          <WinCelebration
-            gameKey="bingo"
-            winnerName={winner ?? ''}
-            currentUser={usernameRef.current}
-            onClose={() => setShowCelebration(false)}
-          />
-        )}
-        <div className={styles.endCard}>
-          <button className={styles.homeBtn} onClick={() => router.push('/')}>
-            <HomeIcon size={18} />
-          </button>
-          <h2 className={styles.endTitle}>
-            {winner === usernameRef.current ? '🎉 BINGO! You won!' : `🎱 ${winner ?? 'Game'} wins!`}
-          </h2>
-          <div className={styles.rankList}>
-            {rankings.map((r) => (
-              <div key={r.username} className={`${styles.rankRow} ${r.username === usernameRef.current ? styles.rankRowMe : ''}`}>
-                <span className={styles.rankMedal}>{RANK_MEDAL[r.rank - 1] ?? `#${r.rank}`}</span>
-                <span className={styles.rankName}>{r.username}</span>
-              </div>
-            ))}
-          </div>
-          {gameMode !== 'bot' && (
-            <div className={styles.rematchSection}>
-              {!rematchVoted ? (
-                <button className={styles.rematchBtn} onClick={handleRematch}>🔁 Play Again</button>
-              ) : (
-                <p className={styles.rematchProgress}>
-                  Waiting for rematch... ({rematchVotes}/{rematchNeeded})
-                </p>
-              )}
-            </div>
-          )}
-          <button className={styles.menuBackBtn} onClick={() => router.push('/bingo')}>Back to Menu</button>
-        </div>
-      </div>
-    );
-  }
 
   // ── Filling phase ─────────────────────────────────────────────────────────
   if (phase === 'filling') {
@@ -835,79 +807,61 @@ export default function BingoPage() {
     const valueCounts = new Map<number, number>();
     for (const v of allValues) valueCounts.set(v, (valueCounts.get(v) ?? 0) + 1);
 
-    return (
-      <div className={styles.gamePage}>
-        {showGuide && <GameGuide gameKey="bingo" onDone={() => setShowGuide(false)} />}
-        <div className={styles.fillOverlay}>
-          <div className={styles.fillCard}>
-            <h2 className={styles.fillTitle}>Fill Your Bingo Card</h2>
-            <p className={styles.fillSubtitle}>
-              Enter {total} unique numbers from 1 to {total}
-            </p>
+    const PRESET_LABELS = ['Card A', 'Card B', 'Card C', 'Card D', 'Card E'];
 
-            <div
-              className={styles.fillGrid}
-              style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` } as CSSProperties}
-            >
-              {fillInput.map((row, r) =>
-                row.map((val, c) => {
-                  const num = parseInt(val, 10);
-                  const outOfRange = val !== '' && (!num || num < 1 || num > total);
-                  const isDuplicate = val !== '' && num >= 1 && num <= total && (valueCounts.get(num) ?? 0) > 1;
-                  const isInvalid = outOfRange || isDuplicate;
-                  return (
-                    <input
-                      key={`${r}-${c}`}
-                      type="number"
-                      min={1}
-                      max={total}
-                      className={`${styles.fillCell} ${isInvalid ? styles.fillCellError : val ? styles.fillCellOk : ''}`}
-                      value={val}
-                      title={outOfRange ? `Use 1–${total}` : isDuplicate ? `${num} already used` : ''}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        // Block values higher than total as user types
-                        const parsed = parseInt(v, 10);
-                        if (v !== '' && parsed > total) {
-                          setFillError(`Numbers must be between 1 and ${total}`);
-                          return;
-                        }
-                        setFillError('');
-                        setFillInput((prev) => {
-                          const next = prev.map((rr) => [...rr]);
-                          next[r]![c] = v;
-                          return next;
-                        });
-                      }}
-                      placeholder="?"
-                    />
-                  );
-                })
-              )}
+    return (
+      <div className={styles.pickPage}>
+        {showGuide && <GameGuide gameKey="bingo" onDone={() => setShowGuide(false)} />}
+
+        {!cardSubmitted ? (
+          <>
+            <div className={styles.pickHeader}>
+              <h2 className={styles.pickTitle}>Choose Your Card</h2>
+              <p className={styles.pickSubtitle}>Pick one — tap to select, then confirm</p>
             </div>
 
-            {fillError && <p className={styles.fillError}>{fillError}</p>}
+            <div className={styles.pickCardsRow}>
+              {presets.map((grid, idx) => (
+                <button
+                  key={idx}
+                  className={`${styles.pickCard} ${selectedPreset === idx ? styles.pickCardSelected : ''}`}
+                  onClick={() => setSelectedPreset(idx)}
+                >
+                  <span className={styles.pickCardLabel}>{PRESET_LABELS[idx]}</span>
+                  <div
+                    className={styles.pickGrid}
+                    style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` } as CSSProperties}
+                  >
+                    {grid.map((row, r) =>
+                      row.map((num, c) => (
+                        <div key={`${r}-${c}`} className={styles.pickCell}>{num}</div>
+                      ))
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
 
-            {!cardSubmitted ? (
-              <div className={styles.fillActions}>
-                <button className={styles.fillRandomBtn} onClick={handleFillRandom}>
-                  🎲 Fill Random
-                </button>
-                <button className={styles.submitCardBtn} onClick={handleSubmitCard}>
-                  ✅ Submit Card
-                </button>
-              </div>
-            ) : (
-              <div className={styles.waitingSubmit}>
-                <div className={styles.spinner} />
-                <p>Waiting for others to submit...</p>
-                <p className={styles.submittedCount}>
-                  {submittedPlayers.size}/{players.filter((p) => !p.username.startsWith('🤖')).length} submitted
-                </p>
-              </div>
-            )}
+            <button
+              className={styles.pickConfirmBtn}
+              disabled={selectedPreset === null}
+              onClick={() => {
+                if (selectedPreset === null) return;
+                handleSubmitCard(presets[selectedPreset]!);
+              }}
+            >
+              {selectedPreset !== null ? `Play with ${PRESET_LABELS[selectedPreset]}` : 'Select a card'}
+            </button>
+          </>
+        ) : (
+          <div className={styles.waitingSubmit}>
+            <div className={styles.spinner} />
+            <p>Waiting for others...</p>
+            <p className={styles.submittedCount}>
+              {submittedPlayers.size}/{players.filter((p) => !p.username.startsWith('🤖')).length} submitted
+            </p>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -925,6 +879,42 @@ export default function BingoPage() {
           currentUser={usernameRef.current}
           onClose={() => setShowCelebration(false)}
         />
+      )}
+
+      {/* ── End Game Modal ─────────────────────────────────────────────── */}
+      {showEndModal && (
+        <div className={styles.endModalOverlay}>
+          <div className={styles.endModal}>
+            <div className={styles.endModalBalls}>
+              {['B','I','N','G','O'].map((l, i) => (
+                <div key={l} className={styles.endModalBall} style={{ background: ['#a855f7','#3b82f6','#22c55e','#f59e0b','#ef4444'][i] } as CSSProperties}>
+                  {l}
+                </div>
+              ))}
+            </div>
+            <h2 className={styles.endTitle}>
+              {winner === usernameRef.current ? '🎉 You Won!' : `🏆 ${winner ?? 'Game'} wins!`}
+            </h2>
+            <div className={styles.rankList}>
+              {rankings.map((r) => (
+                <div key={r.username} className={`${styles.rankRow} ${r.username === usernameRef.current ? styles.rankRowMe : ''}`}>
+                  <span className={styles.rankMedal}>{RANK_MEDAL[r.rank - 1] ?? `#${r.rank}`}</span>
+                  <span className={styles.rankName}>{r.username}</span>
+                </div>
+              ))}
+            </div>
+            <div className={styles.rematchSection}>
+              {!rematchVoted ? (
+                <button className={styles.rematchBtn} onClick={handleRematch}>🔁 Play Again</button>
+              ) : (
+                <p className={styles.rematchProgress}>
+                  Waiting... ({rematchVotes}/{rematchNeeded})
+                </p>
+              )}
+            </div>
+            <button className={styles.menuBackBtn} onClick={() => router.push('/bingo')}>Back to Menu</button>
+          </div>
+        </div>
       )}
 
       {/* BINGO announcement */}

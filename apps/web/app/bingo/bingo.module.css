@@ -231,6 +231,59 @@
 }
 
 /* ── End screen ────────────────────────────────────────────────────────── */
+.endModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  padding: 1rem;
+  animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.endModal {
+  background: rgba(10, 18, 40, 0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 24px;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.endModalBalls {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  margin-bottom: 0.2rem;
+}
+
+.endModalBall {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #fff;
+  font-family: var(--font-lilita), sans-serif;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+}
+
 .endCard {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.1);
@@ -1141,94 +1194,147 @@
   .cardArea { width: 100%; }
 }
 
-/* ── Card filling phase ──────────────────────────────────────────────────── */
-.fillOverlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  padding: 1rem;
-}
-
-.fillCard {
-  background: rgba(10, 20, 40, 0.96);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px;
-  padding: 2rem 1.5rem;
-  width: 100%;
-  max-width: 480px;
+/* ── Card pick page ──────────────────────────────────────────────────────── */
+.pickPage {
+  min-height: 100dvh;
+  background: url('/bingobg.jpg') center center / cover no-repeat fixed;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+  position: relative;
+}
+
+.pickPage::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 10, 25, 0.62);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pickPage > * { position: relative; z-index: 1; }
+
+.pickHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pickTitle {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #fff;
+  margin: 0;
+  font-family: var(--font-lilita), sans-serif;
+}
+
+.pickSubtitle {
+  color: rgba(255,255,255,0.5);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.pickCardsRow {
+  display: flex;
+  flex-direction: row;
   gap: 1rem;
-  backdrop-filter: blur(20px);
-  max-height: 90dvh;
-  overflow-y: auto;
+  overflow-x: auto;
+  padding: 0.5rem 0.5rem 1rem;
+  max-width: 100vw;
 }
 
-.fillTitle {
-  font-size: 1.5rem;
+.pickCard {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 0.9rem;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  backdrop-filter: blur(12px);
+}
+
+.pickCard:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.09);
+}
+
+.pickCardSelected {
+  border-color: #4ade80 !important;
+  background: rgba(74, 222, 128, 0.12) !important;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.18), 0 8px 32px rgba(74, 222, 128, 0.15) !important;
+  transform: translateY(-4px) !important;
+}
+
+.pickCardLabel {
+  font-size: 0.72rem;
   font-weight: 800;
-  color: #fff;
-  margin: 0;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-.fillSubtitle {
-  color: rgba(255,255,255,0.55);
-  font-size: 0.85rem;
-  text-align: center;
-  margin: 0;
+.pickCardSelected .pickCardLabel {
+  color: #4ade80;
 }
 
-.fillGrid {
+.pickGrid {
   display: grid;
-  gap: 4px;
-  width: 100%;
+  gap: 3px;
 }
 
-.fillCell {
-  width: 100%;
-  aspect-ratio: 1;
-  text-align: center;
-  border-radius: 8px;
-  border: 1.5px solid rgba(255,255,255,0.15);
+.pickCell {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
   background: rgba(255,255,255,0.07);
-  color: #fff;
-  font-size: 1rem;
+  border: 1px solid rgba(255,255,255,0.09);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
   font-weight: 700;
-  outline: none;
-  appearance: textfield;
-  -moz-appearance: textfield;
-  transition: border-color 0.15s, background 0.15s;
+  color: rgba(255,255,255,0.8);
 }
 
-.fillCell::-webkit-outer-spin-button,
-.fillCell::-webkit-inner-spin-button { -webkit-appearance: none; }
-
-.fillCell:focus {
-  border-color: #4ade80;
+.pickCardSelected .pickCell {
   background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.2);
+  color: #fff;
 }
 
-.fillCellOk {
-  border-color: rgba(74, 222, 128, 0.5) !important;
-  background: rgba(74, 222, 128, 0.08) !important;
-  color: #4ade80 !important;
+.pickConfirmBtn {
+  padding: 0.95rem 3rem;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  color: #0a2a1a;
+  font-size: 1.05rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
+  font-family: var(--font-lilita), sans-serif;
+  letter-spacing: 0.02em;
 }
 
-.fillCellError {
-  border-color: rgba(248, 113, 113, 0.7) !important;
-  background: rgba(248, 113, 113, 0.12) !important;
-  color: #f87171 !important;
-  animation: cellShake 0.3s ease;
+.pickConfirmBtn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(74, 222, 128, 0.45);
 }
 
-@keyframes cellShake {
-  0%, 100% { transform: translateX(0); }
-  30% { transform: translateX(-4px); }
-  70% { transform: translateX(4px); }
+.pickConfirmBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .fillError {
@@ -1236,48 +1342,6 @@
   font-size: 0.85rem;
   text-align: center;
   margin: 0;
-}
-
-.fillActions {
-  display: flex;
-  gap: 0.75rem;
-  width: 100%;
-}
-
-.fillRandomBtn {
-  flex: 1;
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  border: 1.5px solid rgba(255,255,255,0.2);
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.8);
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.fillRandomBtn:hover {
-  background: rgba(255,255,255,0.13);
-  border-color: rgba(255,255,255,0.35);
-}
-
-.submitCardBtn {
-  flex: 1;
-  padding: 0.85rem 1rem;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-  color: #0a2a1a;
-  font-size: 1rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.15s;
-}
-
-.submitCardBtn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(74, 222, 128, 0.4);
 }
 
 .waitingSubmit {
