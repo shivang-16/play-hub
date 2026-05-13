@@ -9,6 +9,8 @@ import { wordPuzzleService, gridSizeForWordCount } from '../services/word-puzzle
 import { WPRoom, generateRoomCode } from '../types/word-puzzle';
 import { dotsAndBoxesService } from '../services/dots-and-boxes.service';
 import { DABRoom, generateDABRoomCode, initDABGame, LineOwner } from '../types/dots-and-boxes';
+import { bingoService } from '../services/bingo.service';
+import { BingoRoom, generateBingoRoomCode } from '../types/bingo';
 
 export class WebSocketService {
   private io: SocketIOServer;
@@ -51,6 +53,12 @@ export class WebSocketService {
   private dabQueue: { username: string; socket: Socket; gridRows: number; gridCols: number }[] = [];
   private dabRematchVotes: Map<string, Set<string>> = new Map();
   private dabRematchTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+  // ── Bingo state ──────────────────────────────────────────────────────────
+  private bingoRooms: Map<string, BingoRoom> = new Map();
+  private bingoQueue: { username: string; socket: Socket }[] = [];
+  private bingoRematchVotes: Map<string, Set<string>> = new Map();
+  private bingoRematchTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   constructor(httpServer: HTTPServer) {
     // Define allowed origins
@@ -1223,6 +1231,448 @@ export class WebSocketService {
           timestamp: Date.now(),
         });
       });
+
+      // ══════════════════════════════════════════════════════════════════════
+      // BINGO — Socket Event Handlers
+      // ══════════════════════════════════════════════════════════════════════
+
+      const MAX_BINGO_PLAYERS = 8;
+      const DEFAULT_GRID_ROWS = 5;
+      const DEFAULT_GRID_COLS = 5;
+
+      // ── Room: create ─────────────────────────────────────────────────────
+      socket.on('bingo:room:create', (data: { username: string; gridRows?: number; gridCols?: number }) => {
+        const { username } = data;
+        const gridRows = Math.max(3, Math.min(10, data.gridRows ?? DEFAULT_GRID_ROWS));
+        const gridCols = Math.max(3, Math.min(10, data.gridCols ?? DEFAULT_GRID_COLS));
+        socket.data.username = username;
+        this.connectedPlayers.set(username, socket);
+
+        const code = generateBingoRoomCode();
+        const members = new Map<string, Socket>();
+        members.set(username, socket);
+
+        const room: BingoRoom = {
+          code,
+          hostUsername: username,
+          members,
+          maxPlayers: MAX_BINGO_PLAYERS,
+          gridRows,
+          gridCols,
+          status: 'lobby',
+        };
+        this.bingoRooms.set(code, room);
+        socket.data.bingoRoomCode = code;
+        socket.join(`bingo-lobby-${code}`);
+
+        socket.emit('bingo:room:created', { roomCode: code, hostUsername: username, gridRows, gridCols });
+        this.io.to(`bingo-lobby-${code}`).emit('bingo:room:lobbyUpdate', {
+          players: [username],
+          hostUsername: username,
+          maxPlayers: MAX_BINGO_PLAYERS,
+          gridRows,
+          gridCols,
+        });
+        console.log(`🎱 Bingo room created: ${code} by ${username} (${gridRows}×${gridCols})`);
+      });
+
+      // ── Room: host changes grid size ──────────────────────────────────────
+      socket.on('bingo:room:setGrid', (data: { gridRows: number; gridCols: number }) => {
+        const code = socket.data.bingoRoomCode as string | undefined;
+        if (!code) return;
+        const room = this.bingoRooms.get(code);
+        if (!room || room.status !== 'lobby') return;
+        if (room.hostUsername !== socket.data.username) return;
+
+        room.gridRows = Math.max(3, Math.min(10, data.gridRows));
+        room.gridCols = Math.max(3, Math.min(10, data.gridCols));
+
+        this.io.to(`bingo-lobby-${code}`).emit('bingo:room:lobbyUpdate', {
+          players: [...room.members.keys()],
+          hostUsername: room.hostUsername,
+          maxPlayers: room.maxPlayers,
+          gridRows: room.gridRows,
+          gridCols: room.gridCols,
+        });
+      });
+
+      // ── Room: join ───────────────────────────────────────────────────────
+      socket.on('bingo:room:join', (data: { username: string; roomCode: string }) => {
+        const { username, roomCode } = data;
+        socket.data.username = username;
+        this.connectedPlayers.set(username, socket);
+        const code = roomCode.toUpperCase().trim();
+        const room = this.bingoRooms.get(code);
+
+        if (!room) {
+          socket.emit('bingo:room:error', { message: 'Room not found. Check the code and try again.' });
+          return;
+        }
+        if (room.status !== 'lobby') {
+          socket.emit('bingo:room:error', { message: 'This game has already started.' });
+          return;
+        }
+        if (room.members.size >= MAX_BINGO_PLAYERS) {
+          socket.emit('bingo:room:error', { message: 'This room is full (max 8 players).' });
+          return;
+        }
+
+        if (room.members.has(username)) {
+          room.members.set(username, socket);
+          socket.data.bingoRoomCode = code;
+          socket.join(`bingo-lobby-${code}`);
+          socket.emit('bingo:room:joinPending', {
+            roomCode: code,
+            players: [...room.members.keys()],
+            hostUsername: room.hostUsername,
+            maxPlayers: MAX_BINGO_PLAYERS,
+            gridRows: room.gridRows,
+            gridCols: room.gridCols,
+          });
+          return;
+        }
+
+        room.members.set(username, socket);
+        socket.data.bingoRoomCode = code;
+        socket.join(`bingo-lobby-${code}`);
+
+        const playerList = [...room.members.keys()];
+        this.io.to(`bingo-lobby-${code}`).emit('bingo:room:lobbyUpdate', {
+          players: playerList,
+          hostUsername: room.hostUsername,
+          maxPlayers: MAX_BINGO_PLAYERS,
+          gridRows: room.gridRows,
+          gridCols: room.gridCols,
+        });
+        socket.emit('bingo:room:joinPending', {
+          roomCode: code,
+          players: playerList,
+          hostUsername: room.hostUsername,
+          maxPlayers: MAX_BINGO_PLAYERS,
+          gridRows: room.gridRows,
+          gridCols: room.gridCols,
+        });
+        console.log(`🎱 ${username} joined Bingo room ${code}`);
+      });
+
+      // ── Room: leave ──────────────────────────────────────────────────────
+      socket.on('bingo:room:leave', () => {
+        this.handleBingoRoomLeave(socket);
+      });
+
+      // ── Host starts game ─────────────────────────────────────────────────
+      socket.on('bingo:room:start', () => {
+        const code = socket.data.bingoRoomCode as string | undefined;
+        if (!code) return;
+        const room = this.bingoRooms.get(code);
+        if (!room) return;
+
+        if (room.hostUsername !== socket.data.username) {
+          socket.emit('bingo:room:error', { message: 'Only the host can start the game.' });
+          return;
+        }
+        if (room.members.size < 2) {
+          socket.emit('bingo:room:error', { message: 'Need at least 2 players to start.' });
+          return;
+        }
+
+        const playerList = [...room.members.keys()];
+        this.startBingoGame(room, playerList, false);
+        console.log(`🎱 Bingo room ${code} game started: ${playerList.join(', ')}`);
+      });
+
+      // ── Quick match ──────────────────────────────────────────────────────
+      socket.on('bingo:queue:join', (data: { username: string; gridRows?: number; gridCols?: number }) => {
+        const { username } = data;
+        socket.data.username = username;
+        this.connectedPlayers.set(username, socket);
+        this.bingoQueue = this.bingoQueue.filter((e) => e.username !== username);
+        this.bingoQueue.push({ username, socket });
+        socket.emit('bingo:queue:queued', { position: this.bingoQueue.length });
+
+        if (this.bingoQueue.length >= 2) {
+          const pair = this.bingoQueue.splice(0, 2);
+          const code = generateBingoRoomCode();
+          const members = new Map<string, Socket>();
+          for (const p of pair) members.set(p.username, p.socket);
+          const room: BingoRoom = {
+            code,
+            hostUsername: pair[0]!.username,
+            members,
+            maxPlayers: 2,
+            gridRows: DEFAULT_GRID_ROWS,
+            gridCols: DEFAULT_GRID_COLS,
+            status: 'lobby',
+          };
+          this.bingoRooms.set(code, room);
+          this.startBingoGame(room, pair.map((p) => p.username), false);
+        }
+      });
+
+      socket.on('bingo:queue:leave', () => {
+        const username = socket.data.username as string;
+        if (username) this.bingoQueue = this.bingoQueue.filter((e) => e.username !== username);
+      });
+
+      // ── Bot game ─────────────────────────────────────────────────────────
+      socket.on('bingo:bot:start', (data: { username: string; gridRows?: number; gridCols?: number }) => {
+        const { username } = data;
+        const gridRows = Math.max(3, Math.min(10, data.gridRows ?? DEFAULT_GRID_ROWS));
+        const gridCols = Math.max(3, Math.min(10, data.gridCols ?? DEFAULT_GRID_COLS));
+        socket.data.username = username;
+        this.connectedPlayers.set(username, socket);
+
+        const adjectives = ['Lucky', 'Speedy', 'Clever', 'Happy', 'Wild', 'Cosmic', 'Thunder', 'Golden'];
+        const nouns = ['Dauber', 'Caller', 'Bingo', 'Wizard', 'Master', 'Champion', 'Player', 'Ace'];
+        const botName = `🤖 ${adjectives[Math.floor(Math.random() * adjectives.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}`;
+
+        const code = generateBingoRoomCode();
+        const members = new Map<string, Socket>();
+        members.set(username, socket);
+
+        const room: BingoRoom = {
+          code,
+          hostUsername: username,
+          members,
+          maxPlayers: 2,
+          gridRows,
+          gridCols,
+          status: 'lobby',
+        };
+        this.bingoRooms.set(code, room);
+        this.startBingoGame(room, [username, botName], true, botName);
+        console.log(`🎱 Bingo bot game: ${username} vs ${botName} (${gridRows}×${gridCols})`);
+      });
+
+      // ── Player submits filled card ────────────────────────────────────────
+      socket.on('bingo:card:submit', (data: { gameId: string; card: number[][] }) => {
+        const username = socket.data.username as string;
+        const { gameId, card } = data;
+        if (!username || !gameId || !card) return;
+
+        const result = bingoService.submitCard(gameId, username, card);
+        if (!result.success) {
+          socket.emit('bingo:card:error', { message: result.error });
+          return;
+        }
+
+        socket.emit('bingo:card:accepted');
+
+        // Notify everyone that this player submitted
+        this.io.to(`bingo-game-${gameId}`).emit('bingo:card:submitted', { username });
+
+        // If all players ready, start playing
+        if (result.allReady) {
+          const game = bingoService.getGame(gameId);
+          if (!game) return;
+          const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+          const currentCaller = game.players[game.currentCallerIndex]!.username;
+          this.io.to(`bingo-game-${gameId}`).emit('bingo:game:filling:complete', {
+            gameId,
+            currentCallerUsername: currentCaller,
+          });
+          console.log(`🎱 All cards submitted for game ${gameId}. First caller: ${currentCaller}`);
+          // If the first caller is a bot, trigger auto-call after a short delay
+          if (room && game.isBot && game.botUsername === currentCaller) {
+            setTimeout(() => this.doBotCall(gameId, room), 2000);
+          }
+        }
+      });
+
+      // ── Current caller picks a number to call ────────────────────────────
+      socket.on('bingo:call:number', (data: { gameId: string; number: number }) => {
+        const username = socket.data.username as string;
+        const { gameId } = data;
+        if (!username || !gameId) return;
+
+        const result = bingoService.callNumber(gameId, username, data.number);
+        if (!result.success) {
+          socket.emit('bingo:error', { message: result.error });
+          return;
+        }
+
+        const game = bingoService.getGame(gameId);
+        if (!game) return;
+
+        const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+
+        // Bot auto-marks immediately
+        if (game.isBot && game.botUsername) {
+          bingoService.botMark(gameId, game.botUsername, result.calledNumber!);
+        }
+
+        const nextCaller = game.players[game.currentCallerIndex]!.username;
+
+        this.io.to(`bingo-game-${gameId}`).emit('bingo:number:called', {
+          gameId,
+          calledNumber: result.calledNumber,
+          calledNumbers: game.calledNumbers,
+          nextCallerUsername: nextCaller,
+          players: game.players.map((p) => ({
+            username: p.username,
+            colorIndex: p.colorIndex,
+            markedCells: p.markedCells,
+            bingoLines: p.bingoLines,
+            rank: p.rank,
+          })),
+          remaining: game.numberPool.length,
+        });
+
+        if (result.gameOver && room) {
+          room.status = 'ended';
+          this.io.to(`bingo-game-${gameId}`).emit('bingo:game:ended', {
+            gameId,
+            winner: result.winner,
+            rankings: result.rankings,
+            partyId: room.partyId,
+          });
+          this.bingoRematchVotes.set(gameId, new Set());
+          setTimeout(() => bingoService.deleteGame(gameId), 120000);
+        } else if (room && game.isBot && game.botUsername === nextCaller) {
+          // Bot's turn — auto-call after a delay
+          setTimeout(() => this.doBotCall(gameId, room!), 2000);
+        }
+      });
+
+      // ── Player manually marks a cell ──────────────────────────────────────
+      socket.on('bingo:mark:cell', (data: { gameId: string; row: number; col: number }) => {
+        const username = socket.data.username as string;
+        const { gameId, row, col } = data;
+        if (!username || !gameId) return;
+
+        const result = bingoService.markCell(gameId, username, row, col);
+        if (!result.success) {
+          socket.emit('bingo:mark:error', { message: result.error, row, col });
+          return;
+        }
+
+        const game = bingoService.getGame(gameId);
+        if (!game) return;
+        const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+
+        // Broadcast updated state to all players in the game
+        this.io.to(`bingo-game-${gameId}`).emit('bingo:cell:marked', {
+          gameId,
+          username,
+          row,
+          col,
+          bingoLines: result.totalLines,
+          winReached: result.winReached,
+          players: game.players.map((p) => ({
+            username: p.username,
+            colorIndex: p.colorIndex,
+            markedCells: p.markedCells,
+            bingoLines: p.bingoLines,
+            rank: p.rank,
+          })),
+        });
+
+        if (result.winReached) {
+          this.io.to(`bingo-game-${gameId}`).emit('bingo:player:bingo', {
+            gameId,
+            username,
+            totalLines: result.totalLines,
+            rankings: result.rankings,
+          });
+        }
+
+        if (result.gameOver && room) {
+          room.status = 'ended';
+          this.io.to(`bingo-game-${gameId}`).emit('bingo:game:ended', {
+            gameId,
+            winner: result.winner,
+            rankings: result.rankings,
+            partyId: room.partyId,
+          });
+          this.bingoRematchVotes.set(gameId, new Set());
+          setTimeout(() => bingoService.deleteGame(gameId), 120000);
+        }
+      });
+
+      // ── Rejoin ───────────────────────────────────────────────────────────
+      socket.on('bingo:rejoin', (data: { gameId: string; username: string }) => {
+        const { gameId, username } = data;
+        if (!gameId || !username) return;
+        socket.data.username = username;
+        this.connectedPlayers.set(username, socket);
+
+        const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+        if (!room) return;
+
+        room.members.set(username, socket);
+        socket.data.bingoGameId = gameId;
+        socket.data.bingoRoomCode = room.code;
+        socket.join(`bingo-game-${gameId}`);
+
+        const game = bingoService.getGame(gameId);
+        if (game) {
+          const myPlayer = game.players.find((p) => p.username === username);
+          const currentCaller = game.players[game.currentCallerIndex]?.username ?? null;
+          socket.emit('bingo:rejoined', {
+            gameId,
+            gridRows: game.gridRows,
+            gridCols: game.gridCols,
+            calledNumbers: game.calledNumbers,
+            currentCall: game.currentCall,
+            players: game.players.map((p) => ({
+              username: p.username,
+              markedCells: p.markedCells,
+              bingoLines: p.bingoLines,
+              rank: p.rank,
+              colorIndex: p.colorIndex,
+            })),
+            yourCard: myPlayer?.card ?? [],
+            status: game.status,
+            winner: game.winner,
+            rankings: game.rankings,
+            currentCallerUsername: currentCaller,
+          });
+        }
+      });
+
+      // ── Chat ─────────────────────────────────────────────────────────────
+      socket.on('bingo:chat', (data: { gameId: string; message: string }) => {
+        const username = socket.data.username as string;
+        const { gameId, message } = data;
+        if (!username || !gameId || !message?.trim()) return;
+
+        this.io.to(`bingo-game-${gameId}`).emit('bingo:chat:message', {
+          username,
+          message: message.trim().slice(0, 200),
+          timestamp: Date.now(),
+        });
+      });
+
+      // ── Rematch vote ─────────────────────────────────────────────────────
+      socket.on('bingo:rematch:vote', (data: { gameId: string }) => {
+        const username = socket.data.username as string;
+        const { gameId } = data;
+        if (!username || !gameId) return;
+
+        const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+        if (!room || room.status !== 'ended') return;
+
+        let votes = this.bingoRematchVotes.get(gameId);
+        if (!votes) { votes = new Set(); this.bingoRematchVotes.set(gameId, votes); }
+        votes.add(username);
+
+        const players = room.gameState?.players.map((p) => p.username) ?? [];
+        const activePlayers = players.filter((u) => this.connectedPlayers.get(u)?.connected);
+
+        for (const u of activePlayers) {
+          this.connectedPlayers.get(u)?.emit('bingo:rematch:progress', {
+            gameId, votes: votes.size, needed: activePlayers.length, voted: [...votes],
+          });
+        }
+
+        if (!this.bingoRematchTimers.has(gameId)) {
+          const timer = setTimeout(() => this.startBingoRematch(gameId), 30000);
+          this.bingoRematchTimers.set(gameId, timer);
+        }
+        if (votes.size >= activePlayers.length) {
+          this.startBingoRematch(gameId);
+        }
+      });
     });
   }
 
@@ -1612,6 +2062,160 @@ export class WebSocketService {
       hostUsername: room.hostUsername,
       gridRows: room.gridRows,
       gridCols: room.gridCols,
+      maxPlayers: room.maxPlayers,
+    });
+  }
+
+  // ── Bingo helpers ────────────────────────────────────────────────────────
+
+  /** Bot picks a random uncalled number from its pool and calls it. */
+  private doBotCall(gameId: string, room: BingoRoom) {
+    const game = bingoService.getGame(gameId);
+    if (!game || game.status !== 'playing') return;
+
+    const botUsername = game.botUsername;
+    if (!botUsername) return;
+
+    // Pick a random number from remaining pool
+    if (game.numberPool.length === 0) return;
+    const chosen = game.numberPool[Math.floor(Math.random() * game.numberPool.length)]!;
+
+    const result = bingoService.callNumber(gameId, botUsername, chosen);
+    if (!result.success) return;
+
+    // Bot auto-marks its own card
+    bingoService.botMark(gameId, botUsername, chosen);
+
+    const nextCaller = game.players[game.currentCallerIndex]!.username;
+
+    this.io.to(`bingo-game-${gameId}`).emit('bingo:number:called', {
+      gameId,
+      calledNumber: chosen,
+      calledNumbers: game.calledNumbers,
+      nextCallerUsername: nextCaller,
+      players: game.players.map((p) => ({
+        username: p.username,
+        colorIndex: p.colorIndex,
+        markedCells: p.markedCells,
+        bingoLines: p.bingoLines,
+        rank: p.rank,
+      })),
+      remaining: game.numberPool.length,
+    });
+
+    if (result.gameOver) {
+      room.status = 'ended';
+      this.io.to(`bingo-game-${gameId}`).emit('bingo:game:ended', {
+        gameId,
+        winner: result.winner,
+        rankings: result.rankings,
+        partyId: room.partyId,
+      });
+      this.bingoRematchVotes.set(gameId, new Set());
+      setTimeout(() => bingoService.deleteGame(gameId), 120000);
+    }
+  }
+
+  private startBingoGame(room: BingoRoom, playerList: string[], withBot: boolean, botUsername?: string) {
+    const code = room.code;
+    const playerData = playerList.map((u) => ({ username: u, isBot: u === botUsername }));
+    const game = bingoService.createGame(playerData, room.gridRows, room.gridCols);
+
+    room.status = 'filling';
+    room.gameId = game.id;
+    room.partyId = game.id;
+    room.gameState = game;
+
+    const humanPlayers = playerList.filter((u) => u !== botUsername);
+
+    for (const username of humanPlayers) {
+      const s = room.members.get(username);
+      if (!s) continue;
+      s.data.bingoRoomCode = code;
+      s.data.bingoGameId = game.id;
+      s.join(`bingo-game-${game.id}`);
+      s.leave(`bingo-lobby-${code}`);
+    }
+
+    const firstCaller = game.players[game.currentCallerIndex]!.username;
+
+    for (const username of humanPlayers) {
+      const s = room.members.get(username);
+      if (!s) continue;
+      const myPlayer = game.players.find((p) => p.username === username)!;
+      s.emit('bingo:game:started', {
+        gameId: game.id,
+        gridRows: game.gridRows,
+        gridCols: game.gridCols,
+        players: game.players.map((p) => ({
+          username: p.username,
+          colorIndex: p.colorIndex,
+        })),
+        yourUsername: username,
+        yourColorIndex: myPlayer.colorIndex,
+        isBot: withBot,
+        botUsername: botUsername ?? null,
+        status: game.status, // 'filling' or 'playing' (if bot-only, but we have humans)
+        currentCallerUsername: firstCaller,
+      });
+    }
+
+    // If bot game: bot card is auto-generated, only human needs to fill
+    // status is 'filling'; once human submits → 'playing' → first caller can call
+    console.log(`🎱 Bingo game started: ${game.id} — ${playerList.join(', ')} (${room.gridRows}×${room.gridCols})`);
+  }
+
+  private startBingoRematch(gameId: string) {
+    const room = [...this.bingoRooms.values()].find((r) => r.gameId === gameId);
+    if (!room) return;
+
+    const votes = this.bingoRematchVotes.get(gameId);
+    const timer = this.bingoRematchTimers.get(gameId);
+    if (timer) clearTimeout(timer);
+    this.bingoRematchTimers.delete(gameId);
+    this.bingoRematchVotes.delete(gameId);
+
+    const participants = (votes ? [...votes] : []).filter(
+      (u) => this.connectedPlayers.get(u)?.connected
+    );
+
+    if (participants.length < 2) {
+      for (const u of participants) {
+        this.connectedPlayers.get(u)?.emit('bingo:rematch:error', { message: 'Not enough players for rematch.' });
+      }
+      return;
+    }
+
+    room.members = new Map(participants.map((u) => [u, this.connectedPlayers.get(u)!]));
+    room.hostUsername = participants[0]!;
+    room.status = 'lobby';
+    this.startBingoGame(room, participants, false);
+    console.log(`🔁 Bingo rematch started: ${participants.join(', ')}`);
+  }
+
+  private handleBingoRoomLeave(socket: Socket) {
+    const code = socket.data.bingoRoomCode as string | undefined;
+    if (!code) return;
+    const room = this.bingoRooms.get(code);
+    if (!room) return;
+
+    const username = socket.data.username as string;
+    room.members.delete(username);
+    socket.leave(`bingo-lobby-${code}`);
+    socket.data.bingoRoomCode = null;
+
+    if (room.members.size === 0) {
+      this.bingoRooms.delete(code);
+      return;
+    }
+
+    if (room.hostUsername === username) {
+      room.hostUsername = [...room.members.keys()][0]!;
+    }
+
+    this.io.to(`bingo-lobby-${code}`).emit('bingo:room:lobbyUpdate', {
+      players: [...room.members.keys()],
+      hostUsername: room.hostUsername,
       maxPlayers: room.maxPlayers,
     });
   }

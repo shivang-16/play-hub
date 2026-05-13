@@ -38,6 +38,23 @@ async function startServer() {
             console.log(`🚀 Server running on port ${PORT}`);
             console.log(`📍 Health check: http://localhost:${PORT}/health`);
             console.log(`🎮 Environment: ${process.env.NODE_ENV || 'development'}`);
+            // Self-ping to keep Render server alive (prevents 50s inactivity shutdown)
+            const PING_INTERVAL = 40000; // 40 seconds
+            const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+            const keepAlive = async () => {
+                try {
+                    const response = await fetch(`${SELF_URL}/health`);
+                    if (response.ok) {
+                        console.log('🏥 Keep-alive ping successful');
+                    }
+                }
+                catch (error) {
+                    console.log('⚠️ Keep-alive ping failed:', error);
+                }
+            };
+            // Start the keep-alive interval
+            setInterval(keepAlive, PING_INTERVAL);
+            console.log(`⏰ Keep-alive ping scheduled every ${PING_INTERVAL / 1000}s`);
         });
     }
     catch (error) {

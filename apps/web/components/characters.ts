@@ -45,6 +45,7 @@ export const GAME_CHARACTERS: Record<string, CharacterName> = {
   '4-in-a-row': 'rashu',
   'word-puzzle': 'tanya',
   'dots-and-boxes': 'simmu',
+  'bingo': 'tanya',
 };
 
 // Guide steps per game
@@ -66,5 +67,11 @@ export const GAME_GUIDES: Record<string, string[]> = {
     "Complete all 4 sides of a box to capture it — and take another turn!",
     "Strategy tip: avoid giving your opponent a chain of open boxes!",
     "The player with the most boxes at the end wins the game! 🏆",
+  ],
+  'bingo': [
+    "Welcome to Bingo! 🎱 Numbers from 1 to 75 are called automatically every 3 seconds.",
+    "Your card is marked automatically when a called number matches one on your card.",
+    "Complete a horizontal, vertical, or diagonal line of 5 numbers to win!",
+    "The FREE space in the center counts for any line. First to BINGO wins! 🏆",
   ],
 };

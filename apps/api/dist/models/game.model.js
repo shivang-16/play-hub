@@ -51,6 +51,12 @@ const GameSchema = new mongoose_1.Schema({
         username: { type: String, required: true },
         isBot: { type: Boolean, default: false },
     },
+    allPlayers: [
+        {
+            username: { type: String, required: true },
+            isBot: { type: Boolean, default: false },
+        },
+    ],
     board: {
         type: [[Number]],
         required: true,

@@ -38,6 +38,17 @@ const GAMES = [
     tags: ['1-8 Players', 'Strategy', 'VS Bot'],
     players: '1-8',
   },
+  {
+    href: '/bingo',
+    title: 'Bingo',
+    icon: '🎱',
+    accent: '#22c55e',
+    glow: 'rgba(34,197,94,0.3)',
+    gradient: 'linear-gradient(135deg, #22c55e 0%, #15803d 100%)',
+    description: 'Numbers are called automatically — mark your card and shout BINGO! Race friends or challenge the bot.',
+    tags: ['1-8 Players', 'Luck', 'VS Bot'],
+    players: '1-8',
+  },
 ];
 
 export default function HubPage() {
