@@ -450,11 +450,17 @@ export default function BingoPage() {
 
   // ── Mode select → connect socket ──────────────────────────────────────────
   const handleModeSelect = useCallback((mode: GameMode) => {
-    const name = username.trim();
+    const name = (nameInput || username).trim();
     if (!name) {
       setNameShake(true);
       setTimeout(() => setNameShake(false), 600);
       return;
+    }
+    // Commit the name if not already done
+    if (!nameLocked) {
+      sessionStorage.setItem('4inarow_username', name);
+      setUsername(name);
+      setNameLocked(true);
     }
     setGameMode(mode);
 
@@ -488,7 +494,7 @@ export default function BingoPage() {
       setErrorMsg('Could not connect to server. Please try again.');
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, router, setupSocketListeners, applyGameStart]);
+  }, [nameInput, username, nameLocked, router, setupSocketListeners, applyGameStart]);
 
   // ── Pending game from room lobby ──────────────────────────────────────────
   useEffect(() => {
@@ -744,15 +750,9 @@ export default function BingoPage() {
               value={nameInput}
               maxLength={20}
               disabled={nameLocked}
-              onChange={(e) => setNameInput(e.target.value)}
+              onChange={(e) => { setNameInput(e.target.value); setNameLocked(false); setUsername(''); }}
               onKeyDown={(e) => e.key === 'Enter' && confirmName()}
             />
-            {!nameLocked && (
-              <button className={styles.nameConfirmBtn} onClick={() => confirmName()}>OK</button>
-            )}
-            {nameLocked && (
-              <button className={styles.nameEditBtn} onClick={() => { setNameLocked(false); setUsername(''); }}>Edit</button>
-            )}
           </div>
 
           {errorMsg && <p className={styles.errorMsg}>{errorMsg}</p>}
