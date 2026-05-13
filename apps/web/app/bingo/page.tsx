@@ -602,7 +602,15 @@ export default function BingoPage() {
     if (!gameId || !socketRef.current) return;
     if (calledNumbers.includes(num)) return;
     socketRef.current.emit('bingo:call:number', { gameId, number: num });
-  }, [calledNumbers]);
+    // Auto-mark on own card immediately after calling
+    myCard.forEach((row, r) => {
+      row.forEach((val, c) => {
+        if (val === num && !(myMarked[r]?.[c])) {
+          socketRef.current!.emit('bingo:mark:cell', { gameId, row: r, col: c });
+        }
+      });
+    });
+  }, [calledNumbers, myCard, myMarked]);
 
   const handleMarkCell = useCallback((row: number, col: number) => {
     const gameId = gameDataRef.current?.gameId;
