@@ -77,6 +77,10 @@ function buildBoard(words: string[], size: number): {
       }
 
       if (valid) {
+        // Reject if all cells are already filled (word would be a phantom duplicate)
+        const allPreFilled = cells.every((c) => grid[c.row]![c.col] !== '');
+        if (allPreFilled) continue;
+
         for (let i = 0; i < word.length; i++) {
           grid[cells[i]!.row]![cells[i]!.col] = word[i]!;
         }
@@ -193,12 +197,15 @@ class WordPuzzleService {
     // Find matching unclaimed word (forward or reverse)
     const reversed = spelled.split('').reverse().join('');
 
-    const match = game.words.find(
-      (w) =>
-        w.claimedBy === null &&
-        (w.word === spelled || w.word === reversed) &&
-        this.cellsMatch(w.cells, cells, w.word === reversed)
-    );
+    const match = game.words.find((w) => {
+      if (w.claimedBy !== null) return false;
+      if (w.word !== spelled && w.word !== reversed) return false;
+      // Try forward match first, then reversed (handles palindromes too)
+      return (
+        this.cellsMatch(w.cells, cells, false) ||
+        this.cellsMatch(w.cells, cells, true)
+      );
+    });
 
     if (!match) return null;
 

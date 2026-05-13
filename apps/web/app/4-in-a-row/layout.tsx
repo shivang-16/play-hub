@@ -1,4 +1,9 @@
+import type { Metadata } from 'next';
 import React from "react";
+
+export const metadata: Metadata = {
+  title: '4 in a Row',
+};
 
 export default async function MainLayout({
   children,
