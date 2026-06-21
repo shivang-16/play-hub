@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
 import {
   XCircle, Clock, Copy, Check, Crown,
-  Play, Users,
+  Play, Users, Puzzle, Target,
 } from 'lucide-react';
 import styles from './wp-room.module.css';
 
@@ -14,9 +14,9 @@ const MAX_PLAYERS = 8;
 
 // ── Difficulty levels ─────────────────────────────────────────────────────
 const DIFFICULTIES = [
-  { id: 'easy',   label: 'Easy',   emoji: '🟢', wordCount: 8,  gridLabel: '12×12', desc: 'Short board, quick game' },
-  { id: 'medium', label: 'Medium', emoji: '🟡', wordCount: 14, gridLabel: '17×17', desc: 'Balanced challenge'        },
-  { id: 'hard',   label: 'Hard',   emoji: '🔴', wordCount: 20, gridLabel: '22×22', desc: 'Large board, test your eyes' },
+  { id: 'easy',   label: 'Easy',   color: '#4ade80', wordCount: 8,  gridLabel: '12×12', desc: 'Short board, quick game' },
+  { id: 'medium', label: 'Medium', color: '#fbbf24', wordCount: 14, gridLabel: '17×17', desc: 'Balanced challenge'        },
+  { id: 'hard',   label: 'Hard',   color: '#f87171', wordCount: 20, gridLabel: '22×22', desc: 'Large board, test your eyes' },
 ] as const;
 
 type Difficulty = typeof DIFFICULTIES[number]['id'];
@@ -52,6 +52,16 @@ export default function WPRoomPage() {
   const [roomError, setRoomError]     = useState('');
   const [copied, setCopied]           = useState(false);
   const socketRef = useRef<Socket | null>(null);
+
+  // Skip name prompt if username already saved from menu page
+  useEffect(() => {
+    const saved = sessionStorage.getItem('4inarow_username');
+    if (saved && status === 'name_prompt') {
+      setUsername(saved);
+      setStatus('connecting');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const shareableUrl =
     typeof window !== 'undefined' && roomCode
@@ -172,7 +182,7 @@ export default function WPRoomPage() {
     return (
       <div className={styles.page}>
         <div className={styles.promptCard}>
-          <div className={styles.promptIcon}>📝</div>
+          <div className={styles.promptIcon}><Puzzle size={28} /></div>
           <h2 className={styles.promptTitle}>
             {isCreateMode ? 'Create Word Search Room' : 'Join Word Search'}
           </h2>
@@ -220,7 +230,7 @@ export default function WPRoomPage() {
     return (
       <div className={styles.page}>
         <div className={styles.promptCard}>
-          <div className={styles.promptIcon}>📝</div>
+          <div className={styles.promptIcon}><Puzzle size={28} /></div>
           <h2 className={styles.promptTitle}>Game Starting!</h2>
           <p className={styles.promptSub}>Loading the word search board…</p>
         </div>
@@ -250,9 +260,23 @@ export default function WPRoomPage() {
       <div className={styles.card}>
         {/* Header */}
         <div className={styles.header}>
-          <div className={styles.headerEmoji}>📝</div>
+          <div className={styles.headerIcon}>
+            <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+              <ellipse cx="24" cy="26" rx="10" ry="12" fill="#fbbf24" />
+              <rect x="16" y="22" width="16" height="3" rx="1.5" fill="#1a1a2e" opacity="0.7" />
+              <rect x="16" y="28" width="16" height="3" rx="1.5" fill="#1a1a2e" opacity="0.7" />
+              <ellipse cx="24" cy="14" rx="6" ry="5" fill="#fbbf24" />
+              <circle cx="21" cy="13" r="2" fill="#1a1a2e" />
+              <circle cx="27" cy="13" r="2" fill="#1a1a2e" />
+              <ellipse cx="16" cy="16" rx="6" ry="3" fill="rgba(108,92,231,0.2)" transform="rotate(-30 16 16)" />
+              <ellipse cx="32" cy="16" rx="6" ry="3" fill="rgba(108,92,231,0.2)" transform="rotate(30 32 16)" />
+              <path d="M22 10 Q24 6 26 10" stroke="#1a1a2e" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+              <circle cx="22" cy="7" r="1.5" fill="#fd9644" />
+              <circle cx="26" cy="7" r="1.5" fill="#fd9644" />
+            </svg>
+          </div>
           <div>
-            <h1 className={styles.title}>Word Search Lobby</h1>
+            <h1 className={styles.title}>Word Puzzle Bees</h1>
             <p className={styles.subtitle}>
               {isHost ? 'Share the link and start when ready' : `Waiting for ${hostUsername} to start`}
             </p>
@@ -308,7 +332,7 @@ export default function WPRoomPage() {
         {isHost && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <span>🎯</span>
+              <Target size={14} />
               <span>Difficulty</span>
             </div>
             <div className={styles.difficultyGrid}>
@@ -318,7 +342,7 @@ export default function WPRoomPage() {
                   className={`${styles.diffBtn} ${difficulty === d.id ? styles.diffBtnActive : ''}`}
                   onClick={() => handleDifficulty(d.id)}
                 >
-                  <span className={styles.diffEmoji}>{d.emoji}</span>
+                  <span className={styles.diffDot} style={{ background: d.color }} />
                   <span className={styles.diffLabel}>{d.label}</span>
                   <span className={styles.diffGrid}>{d.gridLabel}</span>
                   <span className={styles.diffDesc}>{d.desc}</span>
@@ -331,8 +355,8 @@ export default function WPRoomPage() {
         {!isHost && (
           <div className={styles.section}>
             <div className={styles.sectionHeader}>
-              <span>🎯</span>
-              <span>Difficulty: <strong style={{ color: '#00d4aa' }}>
+              <Target size={14} />
+              <span>Difficulty: <strong style={{ color: '#6c5ce7' }}>
                 {DIFFICULTIES.find((d) => d.wordCount === wordCount)?.label ?? 'Medium'}
               </strong></span>
             </div>

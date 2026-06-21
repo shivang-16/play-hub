@@ -1578,6 +1578,49 @@
 }
 
 @media (max-width: 600px) {
+  .wordList {
+    padding: 8px 12px;
+  }
+
+  .wordListTitle {
+    font-size: 0.75rem;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+
+  .wordItems {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 6px;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .wordItems::-webkit-scrollbar {
+    display: none;
+  }
+
+  .wordItem {
+    padding: 5px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .wordItemText {
+    font-size: 0.75rem;
+  }
+
+  .boardWrap {
+    padding: 8px;
+  }
+
+  .board {
+    max-width: 100%;
+    max-height: calc(100vh - 180px);
+  }
+
   .landingTitle {
     font-size: 2.2rem;
   }

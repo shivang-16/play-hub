@@ -1115,7 +1115,13 @@ export default function WordPuzzlePage() {
 
           <button className={styles.soloCard} onClick={() => {
             const u = nameInput.trim(); if (!u) { triggerNameShake(); return; }
-            handleSetUsername(u); setPhase('solo-setup');
+            handleSetUsername(u);
+            setSoloDifficulty(menuDifficulty);
+            const sock = connectSocket(u);
+            const wc = DIFFICULTIES.find((d) => d.id === menuDifficulty)?.wordCount ?? 14;
+            setIsSolo(true);
+            setSoloElapsed(0);
+            sock.emit('wp:solo:start', { username: u, wordCount: wc });
           }}>
             <span className={styles.soloCardDot} />
             <div>
@@ -1125,7 +1131,7 @@ export default function WordPuzzlePage() {
           </button>
 
           <div className={styles.difficultySection}>
-            <p className={styles.difficultyTitle}>Difficulty <span className={styles.difficultyNote}>(for Find Player)</span></p>
+            <p className={styles.difficultyTitle}>Difficulty</p>
             <div className={styles.difficultyRow}>
               {DIFFICULTIES.map((d) => (
                 <button
